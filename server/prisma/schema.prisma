@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Meal {
+  id           String         @id @default(uuid())
+  description  String
+  status       String         @default("PENDING")
+  groupId      String?
+  startDate    DateTime?
+  endDate      DateTime?
+  shoppingJobParentId String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  recipes      Recipe[]
+  shoppingItems ShoppingItem[]
+}
+
+model Recipe {
+  id          String       @id @default(uuid())
+  name        String
+  mealId      String
+  meal        Meal         @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  ingredients Ingredient[]
+  recipeCard  RecipeCard?
+  recipeCardStatus String? @default("NONE")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model RecipeCard {
+  id        String   @id @default(uuid())
+  recipeId  String   @unique
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Ingredient {
+  id        String  @id @default(uuid())
+  name      String
+  quantity  Float
+  unit      String
+  recipeId  String
+  recipe    Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+}
+
+model ShoppingItem {
+  id        String   @id @default(uuid())
+  name      String
+  quantity  Float
+  unit      String
+  checked   Boolean  @default(false)
+  inCart    Boolean  @default(false)
+  inCartQuantity Float?
+  inCartCost Float?
+  inCartGrocer String?
+  shoppingJobParentId String?
+  shoppingJobId String?
+  shoppingJobCompleted Boolean @default(false)
+  mealId    String
+  meal      Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StapleList {
+  id        String            @id @default(uuid())
+  name      String
+  ingredients StapleIngredient[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model StapleIngredient {
+  id        String     @id @default(uuid())
+  name      String
+  quantity  Float
+  unit      String
+  listId    String
+  list      StapleList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}

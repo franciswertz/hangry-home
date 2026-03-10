@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hangry-home-prisma-push
+  namespace: hangry-home
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: hangry-home-prisma-push
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: prisma-push
+          image: registry.example.com/hangry-home-server:latest
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Running Prisma db push..."
+              if [ -z "${DATABASE_URL:-}" ]; then
+                echo "DATABASE_URL is not set."
+                exit 1
+              fi
+              npx prisma db push
+          envFrom:
+            - secretRef:
+                name: hangry-home-server-secret

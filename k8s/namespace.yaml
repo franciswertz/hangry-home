@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hangry-home
+  labels:
+    name: hangry-home
+    app: hangry-home

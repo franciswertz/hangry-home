@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hangry-home-client
+  namespace: hangry-home
+  labels:
+    app: hangry-home-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hangry-home-client
+  template:
+    metadata:
+      labels:
+        app: hangry-home-client
+    spec:
+      containers:
+        - name: client
+          image: registry.example.com/hangry-home-client:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hangry-home-server
+  namespace: hangry-home
+  labels:
+    app: hangry-home-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hangry-home-server
+  template:
+    metadata:
+      labels:
+        app: hangry-home-server
+    spec:
+      containers:
+        - name: server
+          image: registry.example.com/hangry-home-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4000
+              name: http
+              protocol: TCP
+            - containerPort: 4001
+              name: sse
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: hangry-home-server-config
+            - secretRef:
+                name: hangry-home-server-secret
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

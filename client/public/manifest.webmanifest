@@ -1,0 +1,22 @@
+{
+  "name": "Hangry Home",
+  "short_name": "Hangry",
+  "description": "Plan meals, track staples, and keep your week in sync.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#7BCB59",
+  "background_color": "#FAFBF8",
+  "icons": [
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
