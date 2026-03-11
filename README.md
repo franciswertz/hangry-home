@@ -1,5 +1,7 @@
 # Hangry Home
 
+![Hangry Home demo](docs/hangry-home-demo.gif)
+
 Hangry Home is a work-in-progress meal planning app that generates recipes, lets you customize ingredients, and produces printable recipe cards. It includes a React client with an Apollo/Prisma GraphQL server, supports live updates via SSE, and is intended to automate grocery cart additions via Instacart where configured.
 
 ## Dependencies
