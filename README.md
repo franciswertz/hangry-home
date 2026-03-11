@@ -86,3 +86,43 @@ Or run the helper script:
 - The client is built with Vite and serves static assets via nginx.
 - Server runs Apollo Server with Prisma; SSE streams are served separately.
 - Tests are not configured yet. `npm run test` in `server/` currently exits with an error.
+
+## AgentQueue backend
+
+Hangry Home can use AgentQueue as its job queue provider. AgentQueue is available at:
+
+- https://github.com/franciswertz/agentqueue
+
+Recipe (local AgentQueue backend):
+
+1) Run AgentQueue locally
+
+```sh
+git clone https://github.com/franciswertz/agentqueue
+cd agentqueue
+cp .env.example .env
+docker compose up --build
+```
+
+2) Point Hangry Home to AgentQueue
+
+In `server/.env`, set the job queue provider and MQTT/AgentQueue settings:
+
+```env
+JOB_QUEUE_PROVIDER=agentq
+AGENTQ_APP_ID=hangry
+AGENTQ_PROVIDER=openai
+AGENTQ_MODEL=gpt-5.1-codex-mini
+AGENTQ_TEMPERATURE=0.2
+MQTT_BROKER_URL=tcp://localhost:1883
+MQTT_ENQUEUE_TOPIC=jobs/enqueue/{app_id}
+MQTT_COMPLETE_TOPIC=jobs/complete/{app_id}
+MQTT_QOS=1
+STATUS_BASE_URL=http://localhost:8080
+```
+
+3) Start Hangry Home
+
+```sh
+cd server && npm run dev
+```
