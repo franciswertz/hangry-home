@@ -1,8 +1,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
+COPY server/package*.json ./
 RUN npm ci
-COPY . .
+COPY server/. .
 RUN npx prisma generate
 RUN npm run build
 
