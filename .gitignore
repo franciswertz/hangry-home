@@ -28,8 +28,6 @@ k8s/secret.yaml
 # Local k8s env config
 k8s/config.env
 
-# CI config (internal)
-.gitlab-ci.yml
 
 # OS/editor
 .DS_Store

@@ -1,0 +1,67 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: 1
+  CLIENT_IMAGE: "$REGISTRY_HOST/hangry-home-client"
+  SERVER_IMAGE: "$REGISTRY_HOST/hangry-home-server"
+
+build:client:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - |
+      if [ -n "$REGISTRY_USER" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+        docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASSWORD" "$REGISTRY_HOST"
+      else
+        echo "Skipping registry login (no credentials provided)"
+      fi
+    - docker build -f Dockerfile.client -t "$CLIENT_IMAGE:$CI_COMMIT_SHA" .
+    - docker push "$CLIENT_IMAGE:$CI_COMMIT_SHA"
+    - docker tag "$CLIENT_IMAGE:$CI_COMMIT_SHA" "$CLIENT_IMAGE:latest"
+    - docker push "$CLIENT_IMAGE:latest"
+  only:
+    - main
+    - merge_requests
+
+# deploy:k8s:
+#   stage: deploy
+#   image: alpine/k8s:1.32.11
+#   script:
+#     - kubectl version --client
+#     # Apply base manifests (namespace/resources are in k8s/)
+#     - kubectl apply -k k8s
+#     # Optional: run Prisma db push job
+#     - kubectl apply -f k8s/prisma-push-job.yaml
+#     - kubectl wait --for=condition=complete --timeout=300s job/hangry-home-prisma-push -n "$K8S_NAMESPACE"
+#     # Roll deployments to pick up new images
+#     - kubectl rollout restart deployment/hangry-home-server -n "$K8S_NAMESPACE"
+#     - kubectl rollout restart deployment/hangry-home-client -n "$K8S_NAMESPACE"
+#     - kubectl rollout status deployment/hangry-home-server -n "$K8S_NAMESPACE" --timeout=5m
+#     - kubectl rollout status deployment/hangry-home-client -n "$K8S_NAMESPACE" --timeout=5m
+#   only:
+#     - main
+
+build:server:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - |
+      if [ -n "$REGISTRY_USER" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+        docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASSWORD" "$REGISTRY_HOST"
+      else
+        echo "Skipping registry login (no credentials provided)"
+      fi
+    - docker build -f Dockerfile.server -t "$SERVER_IMAGE:$CI_COMMIT_SHA" .
+    - docker push "$SERVER_IMAGE:$CI_COMMIT_SHA"
+    - docker tag "$SERVER_IMAGE:$CI_COMMIT_SHA" "$SERVER_IMAGE:latest"
+    - docker push "$SERVER_IMAGE:latest"
+  only:
+    - main
+    - merge_requests
