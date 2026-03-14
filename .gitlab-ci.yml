@@ -54,6 +54,7 @@ deploy:k8s:
     # Apply base manifests (namespace/resources are in k8s/)
     - kubectl apply -k k8s
     # Optional: run Prisma db push job
+    - kubectl delete job/hangry-home-prisma-push -n "$K8S_NAMESPACE" --ignore-not-found
     - kubectl apply -f k8s/prisma-push-job.yaml
     - kubectl wait --for=condition=complete --timeout=300s job/hangry-home-prisma-push -n "$K8S_NAMESPACE"
     # Roll deployments to pick up new images
