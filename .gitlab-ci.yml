@@ -35,35 +35,11 @@ build:client:
     - main
     - merge_requests
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-# deploy:k8s:
-#   stage: deploy
-#   image: alpine/k8s:1.32.11
-#   script:
-#     - kubectl version --client
-#     # Apply base manifests (namespace/resources are in k8s/)
-#     - kubectl apply -k k8s
-#     # Optional: run Prisma db push job
-#     - kubectl apply -f k8s/prisma-push-job.yaml
-#     - kubectl wait --for=condition=complete --timeout=300s job/hangry-home-prisma-push -n "$K8S_NAMESPACE"
-#     # Roll deployments to pick up new images
-#     - kubectl rollout restart deployment/hangry-home-server -n "$K8S_NAMESPACE"
-#     - kubectl rollout restart deployment/hangry-home-client -n "$K8S_NAMESPACE"
-#     - kubectl rollout status deployment/hangry-home-server -n "$K8S_NAMESPACE" --timeout=5m
-#     - kubectl rollout status deployment/hangry-home-client -n "$K8S_NAMESPACE" --timeout=5m
-#   only:
-#     - main
-=======
->>>>>>> Stashed changes
 deploy:k8s:
   stage: deploy
   image: alpine/k8s:1.32.11
   script:
     - kubectl version --client
-<<<<<<< Updated upstream
-=======
     - |
       if [ -f k8s/config.env ]; then
         echo "Using existing k8s/config.env"
@@ -73,7 +49,6 @@ deploy:k8s:
         echo "Missing k8s/config.env. Provide K8S_CONFIG_ENV in CI variables."
         exit 1
       fi
->>>>>>> Stashed changes
     # Apply base manifests (namespace/resources are in k8s/)
     - kubectl apply -k k8s
     # Optional: run Prisma db push job
@@ -86,10 +61,6 @@ deploy:k8s:
     - kubectl rollout status deployment/hangry-home-client -n "$K8S_NAMESPACE" --timeout=5m
   only:
     - main
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
 build:server:
   stage: build
