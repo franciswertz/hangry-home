@@ -43,6 +43,8 @@ deploy:k8s:
     - |
       if [ -f k8s/config.env ]; then
         echo "Using existing k8s/config.env"
+      elif [ -n "$K8S_CONFIG_ENV" ] && [ -f "$K8S_CONFIG_ENV" ]; then
+        cat "$K8S_CONFIG_ENV" > k8s/config.env
       elif [ -n "$K8S_CONFIG_ENV" ]; then
         printf "%s" "$K8S_CONFIG_ENV" > k8s/config.env
       else
