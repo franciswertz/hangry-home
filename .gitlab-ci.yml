@@ -41,30 +41,15 @@ deploy:k8s:
   script:
     - kubectl version --client
     - |
-      if [ -n "$K8S_CONFIG_ENV" ] && [ -f "$K8S_CONFIG_ENV" ]; then
-        cat "$K8S_CONFIG_ENV" > k8s/config.env
-      elif [ -n "$K8S_CONFIG_ENV" ]; then
-        printf "%s" "$K8S_CONFIG_ENV" > k8s/config.env
+      if [ -n "$K8S_CONFIGMAP_YAML" ] && [ -f "$K8S_CONFIGMAP_YAML" ]; then
+        cat "$K8S_CONFIGMAP_YAML" > k8s/configmap.yaml
+      elif [ -n "$K8S_CONFIGMAP_YAML" ]; then
+        printf "%s" "$K8S_CONFIGMAP_YAML" > k8s/configmap.yaml
       else
-        echo "Missing K8S_CONFIG_ENV in CI variables."
+        echo "Missing K8S_CONFIGMAP_YAML in CI variables."
         exit 1
       fi
-    - |
-      python - <<'PY'
-      required = {"INGRESS_HOST", "CLIENT_IMAGE", "SERVER_IMAGE"}
-      present = set()
-      with open("k8s/config.env", "r", encoding="utf-8") as f:
-        for line in f:
-          line = line.strip()
-          if not line or line.startswith("#"):
-            continue
-          key = line.split("=", 1)[0].strip()
-          if key:
-            present.add(key)
-      missing = sorted(required - present)
-      if missing:
-        raise SystemExit(f"k8s/config.env missing required keys: {', '.join(missing)}")
-      PY
+    - kubectl delete configmap/hangry-home-server-config -n "$K8S_NAMESPACE" --ignore-not-found
     # Optional: run Prisma db push job
     - kubectl delete job/hangry-home-prisma-push -n "$K8S_NAMESPACE" --ignore-not-found
     # Apply base manifests (namespace/resources are in k8s/)

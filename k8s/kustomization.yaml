@@ -3,18 +3,11 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  - configmap.yaml
   - deployment.yaml
   - service.yaml
   - ingress.yaml
   - prisma-push-job.yaml
-
-configMapGenerator:
-  - name: hangry-home-server-config
-    envs:
-      - config.env
-
-generatorOptions:
-  disableNameSuffixHash: true
 
 replacements:
   - source:

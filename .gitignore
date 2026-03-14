@@ -28,6 +28,9 @@ k8s/secret.yaml
 # Local k8s env config
 k8s/config.env
 
+# Local k8s generated configmap
+k8s/configmap.yaml
+
 
 # OS/editor
 .DS_Store
