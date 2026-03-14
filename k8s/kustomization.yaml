@@ -13,6 +13,9 @@ configMapGenerator:
     envs:
       - config.env
 
+generatorOptions:
+  disableNameSuffixHash: true
+
 replacements:
   - source:
       kind: ConfigMap
