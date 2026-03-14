@@ -41,16 +41,30 @@ deploy:k8s:
   script:
     - kubectl version --client
     - |
-      if [ -f k8s/config.env ]; then
-        echo "Using existing k8s/config.env"
-      elif [ -n "$K8S_CONFIG_ENV" ] && [ -f "$K8S_CONFIG_ENV" ]; then
+      if [ -n "$K8S_CONFIG_ENV" ] && [ -f "$K8S_CONFIG_ENV" ]; then
         cat "$K8S_CONFIG_ENV" > k8s/config.env
       elif [ -n "$K8S_CONFIG_ENV" ]; then
         printf "%s" "$K8S_CONFIG_ENV" > k8s/config.env
       else
-        echo "Missing k8s/config.env. Provide K8S_CONFIG_ENV in CI variables."
+        echo "Missing K8S_CONFIG_ENV in CI variables."
         exit 1
       fi
+    - |
+      python - <<'PY'
+      required = {"INGRESS_HOST", "CLIENT_IMAGE", "SERVER_IMAGE"}
+      present = set()
+      with open("k8s/config.env", "r", encoding="utf-8") as f:
+        for line in f:
+          line = line.strip()
+          if not line or line.startswith("#"):
+            continue
+          key = line.split("=", 1)[0].strip()
+          if key:
+            present.add(key)
+      missing = sorted(required - present)
+      if missing:
+        raise SystemExit(f"k8s/config.env missing required keys: {', '.join(missing)}")
+      PY
     # Optional: run Prisma db push job
     - kubectl delete job/hangry-home-prisma-push -n "$K8S_NAMESPACE" --ignore-not-found
     # Apply base manifests (namespace/resources are in k8s/)
