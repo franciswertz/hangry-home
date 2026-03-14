@@ -6,6 +6,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+  - prisma-push-job.yaml
 
 configMapGenerator:
   - name: hangry-home-server-config
