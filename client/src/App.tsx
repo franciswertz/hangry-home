@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApolloProvider, useQuery, useMutation, useApolloClient } from '@apollo/client/react';
-import { Link, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apolloClient } from './graphql/client';
+import {
+  ensureValidAccessToken,
+  getStoredUsername,
+  getUserProfile,
+  loginWithWebAuthn,
+  logout,
+  registerWithWebAuthn,
+  setStoredUsername,
+} from './auth/auth';
 import {
   GET_MEALS,
   GET_MEAL,
@@ -31,12 +40,14 @@ import {
 
 const sseBaseUrl = import.meta.env.VITE_SSE_URL ?? 'http://localhost:4001';
 const normalizedSseBase = sseBaseUrl.endsWith('/') ? sseBaseUrl.slice(0, -1) : sseBaseUrl;
-const buildSseUrl = (path: string) => {
+const buildSseUrl = (path: string, accessToken?: string) => {
   if (!normalizedSseBase) return path;
   if (normalizedSseBase.endsWith('/events') && path.startsWith('/events')) {
-    return `${normalizedSseBase}${path.slice('/events'.length)}`;
+    const url = `${normalizedSseBase}${path.slice('/events'.length)}`;
+    return accessToken ? `${url}?access_token=${encodeURIComponent(accessToken)}` : url;
   }
-  return `${normalizedSseBase}${path}`;
+  const url = `${normalizedSseBase}${path}`;
+  return accessToken ? `${url}${url.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(accessToken)}` : url;
 };
 
 type MealStatus =
@@ -986,13 +997,19 @@ function MealDetailView() {
       }, delay);
     };
 
-    const openEventSource = () => {
+    const openEventSource = async () => {
       if (isClosed) return;
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }
 
-      const eventSource = new EventSource(buildSseUrl(`/events/meals/${mealId}`));
+      const accessToken = await ensureValidAccessToken();
+      if (!accessToken) {
+        window.dispatchEvent(new CustomEvent('auth:logout'));
+        return;
+      }
+
+      const eventSource = new EventSource(buildSseUrl(`/events/meals/${mealId}`, accessToken));
       eventSourceRef.current = eventSource;
 
       eventSource.onopen = () => {
@@ -1010,7 +1027,7 @@ function MealDetailView() {
       };
     };
 
-    openEventSource();
+    void openEventSource();
 
     return () => {
       isClosed = true;
@@ -1623,13 +1640,19 @@ function MealsPage({ searchTerm }: { searchTerm: string }) {
       }, delay);
     };
 
-    const openEventSource = () => {
+    const openEventSource = async () => {
       if (isClosed) return;
       if (listEventSourceRef.current) {
         listEventSourceRef.current.close();
       }
 
-      const eventSource = new EventSource(buildSseUrl('/events/meals'));
+      const accessToken = await ensureValidAccessToken();
+      if (!accessToken) {
+        window.dispatchEvent(new CustomEvent('auth:logout'));
+        return;
+      }
+
+      const eventSource = new EventSource(buildSseUrl('/events/meals', accessToken));
       listEventSourceRef.current = eventSource;
 
       eventSource.onopen = () => {
@@ -1647,7 +1670,7 @@ function MealsPage({ searchTerm }: { searchTerm: string }) {
       };
     };
 
-    openEventSource();
+    void openEventSource();
 
     return () => {
       isClosed = true;
@@ -1704,8 +1727,158 @@ function MealsPage({ searchTerm }: { searchTerm: string }) {
   );
 }
 
+function useAuthStatus() {
+  const [status, setStatus] = useState<'checking' | 'authed' | 'anon'>('checking');
+
+  useEffect(() => {
+    let isActive = true;
+
+    const checkAuth = async () => {
+      const token = await ensureValidAccessToken();
+      if (!isActive) return;
+      setStatus(token ? 'authed' : 'anon');
+    };
+
+    checkAuth();
+
+    const handleLogin = () => setStatus('authed');
+    const handleLogout = () => setStatus('anon');
+
+    window.addEventListener('auth:login', handleLogin);
+    window.addEventListener('auth:logout', handleLogout);
+
+    return () => {
+      isActive = false;
+      window.removeEventListener('auth:login', handleLogin);
+      window.removeEventListener('auth:logout', handleLogout);
+    };
+  }, []);
+
+  return status;
+}
+
+function LoginPage() {
+  const navigate = useNavigate();
+  const [username, setUsername] = useState(getStoredUsername());
+  const [status, setStatus] = useState<'idle' | 'working'>('idle');
+  const [error, setError] = useState('');
+
+  const updateUsername = (value: string) => {
+    setUsername(value);
+    setStoredUsername(value);
+  };
+
+  const handleLogin = async () => {
+    setError('');
+    setStatus('working');
+    try {
+      await loginWithWebAuthn(username);
+      navigate('/', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed.');
+    } finally {
+      setStatus('idle');
+    }
+  };
+
+  const handleRegister = async () => {
+    setError('');
+    setStatus('working');
+    try {
+      await registerWithWebAuthn(username);
+      await loginWithWebAuthn(username);
+      navigate('/', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed.');
+    } finally {
+      setStatus('idle');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[color:var(--hh-background)] flex items-center justify-center px-4">
+      <div className="w-full max-w-md hh-card p-6 md:p-8 space-y-5">
+        <div className="space-y-2 text-center">
+          <h1 className="hh-display text-2xl font-semibold">Hangry Home</h1>
+          <p className="text-sm hh-muted">
+            Sign in with your passkey to continue.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <label className="text-xs hh-muted">Username</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(event) => updateUsername(event.target.value)}
+            placeholder="yourname"
+            className="hh-input w-full"
+          />
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleLogin}
+              disabled={status === 'working' || !username.trim()}
+              className="hh-btn hh-btn--primary"
+            >
+              {status === 'working' ? 'Working...' : 'Sign in with passkey'}
+            </button>
+            <button
+              type="button"
+              onClick={handleRegister}
+              disabled={status === 'working' || !username.trim()}
+              className="hh-btn hh-btn--secondary"
+            >
+              {status === 'working' ? 'Working...' : 'Register new passkey'}
+            </button>
+          </div>
+          <p className="text-xs hh-muted">
+            We remember your username on this device so you can sign back in quickly.
+          </p>
+        </div>
+
+        {error && <div className="hh-alert text-sm">{error}</div>}
+      </div>
+    </div>
+  );
+}
+
 function AppContent() {
+  const authStatus = useAuthStatus();
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  if (authStatus === 'checking') {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm hh-muted">
+        Checking session...
+      </div>
+    );
+  }
+
+  if (authStatus === 'anon') {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  if (location.pathname === '/login') {
+    return <Navigate to="/" replace />;
+  }
+
+  const { displayName, username } = getUserProfile();
+  const profileLabel = displayName || username || 'User';
+  const initials = profileLabel
+    .split(' ')
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   return (
     <div className="min-h-screen">
@@ -1730,6 +1903,36 @@ function AppContent() {
             <Link to="/staples" className="text-[color:var(--hh-text-muted)] hover:text-[color:var(--hh-text)]">
               Staples
             </Link>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsProfileOpen((prev) => !prev)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--hh-kiwi-soft)] text-xs font-semibold text-[color:var(--hh-text)]"
+                aria-label="Open profile menu"
+              >
+                {initials || 'HH'}
+              </button>
+              {isProfileOpen && (
+                <div className="absolute right-0 mt-2 w-48 rounded-lg border border-[color:var(--hh-border)] bg-[color:var(--hh-card)] shadow-lg">
+                  <div className="px-4 py-3 text-xs">
+                    <p className="font-semibold text-[color:var(--hh-text)]">{profileLabel}</p>
+                    {displayName && username && displayName !== username && (
+                      <p className="hh-muted">{username}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      logout();
+                    }}
+                    className="w-full px-4 py-2 text-left text-xs font-semibold text-[color:var(--hh-hangry)] hover:bg-[color:var(--hh-panel)]"
+                  >
+                    Log out
+                  </button>
+                </div>
+              )}
+            </div>
           </nav>
           <div className="w-full order-3 md:w-80">
             <input
