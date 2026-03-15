@@ -8,7 +8,6 @@ import {
   getUserProfile,
   loginWithWebAuthn,
   logout,
-  registerWithWebAuthn,
   setStoredUsername,
 } from './auth/auth';
 import {
@@ -1781,20 +1780,6 @@ function LoginPage() {
     }
   };
 
-  const handleRegister = async () => {
-    setError('');
-    setStatus('working');
-    try {
-      await registerWithWebAuthn(username);
-      await loginWithWebAuthn(username);
-      navigate('/', { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed.');
-    } finally {
-      setStatus('idle');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[color:var(--hh-background)] flex items-center justify-center px-4">
       <div className="w-full max-w-md hh-card p-6 md:p-8 space-y-5">
@@ -1822,14 +1807,6 @@ function LoginPage() {
               className="hh-btn hh-btn--primary"
             >
               {status === 'working' ? 'Working...' : 'Sign in with passkey'}
-            </button>
-            <button
-              type="button"
-              onClick={handleRegister}
-              disabled={status === 'working' || !username.trim()}
-              className="hh-btn hh-btn--secondary"
-            >
-              {status === 'working' ? 'Working...' : 'Register new passkey'}
             </button>
           </div>
           <p className="text-xs hh-muted">
