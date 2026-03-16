@@ -27,11 +27,27 @@ async function startServer() {
   await server.start();
 
   const app = express();
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`[HTTP] ${req.method} ${req.url} ${res.statusCode} ${duration}ms`);
+    });
+    next();
+  });
   app.use(cors({
     origin: true,
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization'],
   }));
+
+  app.get('/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      uptime: process.uptime(),
+      jobQueue: jobQueue.getStatus(),
+    });
+  });
 
   app.use(
     '/graphql',

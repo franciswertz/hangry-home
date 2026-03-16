@@ -85,16 +85,16 @@ export const getUserProfile = () => {
   return { username, displayName };
 };
 
-export const getRefreshToken = () => sessionStorage.getItem(REFRESH_TOKEN_KEY) ?? '';
+export const getRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY) ?? '';
 
 export const setTokens = (tokens: AuthTokens) => {
   sessionStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
-  sessionStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
 };
 
 export const clearTokens = () => {
   sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
   dispatchAuthEvent('auth:logout');
 };
 
