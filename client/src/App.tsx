@@ -3,12 +3,12 @@ import { ApolloProvider, useQuery, useMutation, useApolloClient } from '@apollo/
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apolloClient } from './graphql/client';
 import {
+  completeOidcLogin,
   ensureValidAccessToken,
-  getStoredUsername,
+  getAccessToken,
   getUserProfile,
-  loginWithWebAuthn,
   logout,
-  setStoredUsername,
+  startOidcLogin,
 } from './auth/auth';
 import {
   GET_MEALS,
@@ -1757,22 +1757,14 @@ function useAuthStatus() {
 }
 
 function LoginPage() {
-  const navigate = useNavigate();
-  const [username, setUsername] = useState(getStoredUsername());
   const [status, setStatus] = useState<'idle' | 'working'>('idle');
   const [error, setError] = useState('');
-
-  const updateUsername = (value: string) => {
-    setUsername(value);
-    setStoredUsername(value);
-  };
 
   const handleLogin = async () => {
     setError('');
     setStatus('working');
     try {
-      await loginWithWebAuthn(username);
-      navigate('/', { replace: true });
+      await startOidcLogin();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed.');
     } finally {
@@ -1791,30 +1783,106 @@ function LoginPage() {
         </div>
 
         <div className="space-y-3">
-          <label className="text-xs hh-muted">Username</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(event) => updateUsername(event.target.value)}
-            placeholder="yourname"
-            className="hh-input w-full"
-          />
           <div className="flex flex-col gap-2">
             <button
               type="button"
               onClick={handleLogin}
-              disabled={status === 'working' || !username.trim()}
+              disabled={status === 'working'}
               className="hh-btn hh-btn--primary"
             >
-              {status === 'working' ? 'Working...' : 'Sign in with passkey'}
+              {status === 'working' ? 'Working...' : 'Sign in'}
             </button>
           </div>
           <p className="text-xs hh-muted">
-            We remember your username on this device so you can sign back in quickly.
+            You will be redirected to authenticate and then return here.
           </p>
         </div>
 
         {error && <div className="hh-alert text-sm">{error}</div>}
+      </div>
+    </div>
+  );
+}
+
+function AuthCallbackPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [error, setError] = useState('');
+  const EXCHANGE_KEY = 'hangry.oidc.exchange';
+  const EXCHANGE_ERROR_KEY = 'hangry.oidc.exchange.error';
+
+  useEffect(() => {
+    let isActive = true;
+    let pollTimer: number | undefined;
+
+    const startPollingForToken = () => {
+      const startedAt = Date.now();
+      pollTimer = window.setInterval(() => {
+        if (!isActive) return;
+        if (getAccessToken()) {
+          window.location.replace('/');
+          return;
+        }
+        if (Date.now() - startedAt > 5000) {
+          window.clearInterval(pollTimer);
+          pollTimer = undefined;
+          sessionStorage.removeItem(EXCHANGE_KEY);
+          setError('Login is taking too long. Please try again.');
+        }
+      }, 250);
+    };
+
+    const finish = async () => {
+      const code = new URLSearchParams(location.search).get('code');
+      if (!code) {
+        setError('Missing authorization code.');
+        return;
+      }
+      if (getAccessToken()) {
+        window.location.replace('/');
+        return;
+      }
+      const storedError = sessionStorage.getItem(EXCHANGE_ERROR_KEY);
+      if (storedError) {
+        sessionStorage.removeItem(EXCHANGE_ERROR_KEY);
+        sessionStorage.removeItem(EXCHANGE_KEY);
+        setError(storedError);
+        return;
+      }
+      if (sessionStorage.getItem(EXCHANGE_KEY) === 'pending') {
+        startPollingForToken();
+        return;
+      }
+      sessionStorage.setItem(EXCHANGE_KEY, 'pending');
+      try {
+        await completeOidcLogin(location.search);
+        if (!isActive) return;
+        sessionStorage.setItem(EXCHANGE_KEY, 'done');
+        window.location.replace('/');
+        return;
+      } catch (err) {
+        if (!isActive) return;
+        const message = err instanceof Error ? err.message : 'Login failed.';
+        sessionStorage.setItem(EXCHANGE_ERROR_KEY, message);
+        sessionStorage.removeItem(EXCHANGE_KEY);
+        setError(message);
+      }
+    };
+    finish();
+    return () => {
+      isActive = false;
+      if (pollTimer) {
+        window.clearInterval(pollTimer);
+      }
+    };
+  }, [location.search, navigate]);
+
+  return (
+    <div className="min-h-screen bg-[color:var(--hh-background)] flex items-center justify-center px-4">
+      <div className="w-full max-w-md hh-card p-6 md:p-8 space-y-5 text-center">
+        <h1 className="hh-display text-2xl font-semibold">Signing you in</h1>
+        <p className="text-sm hh-muted">Finishing authentication...</p>
+        {error && <div className="hh-alert text-sm text-left">{error}</div>}
       </div>
     </div>
   );
@@ -1825,6 +1893,10 @@ function AppContent() {
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  if (location.pathname === '/auth/callback') {
+    return <AuthCallbackPage />;
+  }
 
   if (authStatus === 'checking') {
     return (
