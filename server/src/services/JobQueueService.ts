@@ -13,12 +13,22 @@ export interface ShoppingItemJob extends Ingredient {
   id: string;
 }
 
+export type JobQueueStatus = {
+  provider: 'agentq' | 'noop';
+  connected: boolean;
+  lastConnectAt?: string;
+  lastDisconnectAt?: string;
+  lastError?: string;
+  lastMessageAt?: string;
+};
+
 export interface JobQueueService {
   enqueueMealGeneration(mealId: string, description: string): Promise<void>;
   enqueueAdditionalRecipes(mealId: string, prompt: string, recipes: RecipeSummary[]): Promise<void>;
   enqueueRecipeCard(recipeId: string, title: string, ingredients: Ingredient[]): Promise<void>;
   enqueueShopping(mealId: string, ingredients: Ingredient[]): Promise<void>;
   enqueueShoppingItems(mealId: string, parentJobId: string, items: ShoppingItemJob[]): Promise<void>;
+  getStatus(): JobQueueStatus;
 }
 
 export class NoOpJobQueueService implements JobQueueService {
@@ -40,5 +50,9 @@ export class NoOpJobQueueService implements JobQueueService {
 
   async enqueueShoppingItems(_mealId: string, _parentJobId: string, _items: ShoppingItemJob[]): Promise<void> {
     console.log('[NoOpJobQueue] Shopping item jobs enqueued (no-op)');
+  }
+
+  getStatus(): JobQueueStatus {
+    return { provider: 'noop', connected: true };
   }
 }

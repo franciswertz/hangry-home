@@ -8,7 +8,7 @@ Hangry Home is a work-in-progress meal planning app that generates recipes, lets
 
 Local:
 - Node.js 20+ and npm
-- SQLite (default via Prisma, no external service)
+- PostgreSQL (required by Prisma schema)
 - Optional: MQTT broker if using the AgentQ job queue provider
 
 Infrastructure (Kubernetes):

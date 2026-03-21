@@ -10,6 +10,7 @@ import { loadAgentQConfig } from './config/agentq.js';
 import { AgentQJobQueueService } from './services/AgentQJobQueueService.js';
 import { NoOpJobQueueService, type JobQueueService } from './services/JobQueueService.js';
 import { onAllMealEvents, onMealEvent } from './events/mealEvents.js';
+import { requireAuth, verifyRequestAuth } from './auth/auth.js';
 
 async function startServer() {
   const jobQueueProvider = process.env.JOB_QUEUE_PROVIDER ?? 'noop';
@@ -26,11 +27,32 @@ async function startServer() {
   await server.start();
 
   const app = express();
-  app.use(cors());
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`[HTTP] ${req.method} ${req.url} ${res.statusCode} ${duration}ms`);
+    });
+    next();
+  });
+  app.use(cors({
+    origin: true,
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }));
+
+  app.get('/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      uptime: process.uptime(),
+      jobQueue: jobQueue.getStatus(),
+    });
+  });
 
   app.use(
     '/graphql',
     express.json(),
+    requireAuth,
     expressMiddleware(server, {
       context: async () => ({
         jobQueue,
@@ -44,14 +66,24 @@ async function startServer() {
   });
 
   const ssePort = Number(process.env.SSE_PORT ?? 4001);
-  const sseServer = createServer((req, res) => {
+  const sseServer = createServer(async (req, res) => {
+    const authResult = await verifyRequestAuth(req);
+    if (!authResult.ok) {
+      res.statusCode = authResult.status;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: authResult.message }));
+      return;
+    }
+
     if (!req.url || req.method !== 'GET') {
       res.statusCode = 404;
       res.end();
       return;
     }
 
-    if (req.url === '/events/meals') {
+    const requestPath = new URL(req.url, 'http://localhost').pathname;
+
+    if (requestPath === '/events/meals') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
@@ -81,13 +113,13 @@ async function startServer() {
       return;
     }
 
-    if (!req.url.startsWith('/events/meals/')) {
+    if (!requestPath.startsWith('/events/meals/')) {
       res.statusCode = 404;
       res.end();
       return;
     }
 
-    const mealId = req.url.replace('/events/meals/', '').split('?')[0];
+    const mealId = requestPath.replace('/events/meals/', '');
     if (!mealId) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'mealId required' }));

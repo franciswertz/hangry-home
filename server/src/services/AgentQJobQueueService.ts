@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/database.js';
 import type { AgentQConfig } from '../config/agentq.js';
 import { emitMealEvent } from '../events/mealEvents.js';
-import type { Ingredient, JobQueueService, RecipeSummary, ShoppingItemJob } from './JobQueueService.js';
+import type { Ingredient, JobQueueService, JobQueueStatus, RecipeSummary, ShoppingItemJob } from './JobQueueService.js';
 
 interface AgentQJobRequest {
   job_id: string;
@@ -198,9 +198,13 @@ const parseJobId = (jobId: string): ParsedJobId | null => {
 export class AgentQJobQueueService implements JobQueueService {
   private client: MqttClient;
   private config: AgentQConfig;
+  private status: Omit<JobQueueStatus, 'provider'>;
 
   constructor(config: AgentQConfig) {
     this.config = config;
+    this.status = {
+      connected: false,
+    };
     this.client = connect(config.brokerUrl, {
       username: config.username,
       password: config.password,
@@ -208,6 +212,8 @@ export class AgentQJobQueueService implements JobQueueService {
     });
 
     this.client.on('connect', () => {
+      this.status.connected = true;
+      this.status.lastConnectAt = new Date().toISOString();
       this.client.subscribe(config.completeTopic, { qos: config.qos }, (error) => {
         if (error) {
           console.error('[AgentQ] Failed to subscribe to completion topic', error);
@@ -215,10 +221,34 @@ export class AgentQJobQueueService implements JobQueueService {
           console.log(`[AgentQ] Subscribed to ${config.completeTopic}`);
         }
       });
+      console.log(`[AgentQ] Connected to ${config.brokerUrl}`);
+    });
+
+    this.client.on('reconnect', () => {
+      console.warn('[AgentQ] Reconnecting to broker...');
+    });
+
+    this.client.on('close', () => {
+      this.status.connected = false;
+      this.status.lastDisconnectAt = new Date().toISOString();
+      console.warn('[AgentQ] MQTT connection closed');
+    });
+
+    this.client.on('offline', () => {
+      this.status.connected = false;
+      this.status.lastDisconnectAt = new Date().toISOString();
+      console.warn('[AgentQ] MQTT client offline');
+    });
+
+    this.client.on('end', () => {
+      this.status.connected = false;
+      this.status.lastDisconnectAt = new Date().toISOString();
+      console.warn('[AgentQ] MQTT client ended');
     });
 
     this.client.on('message', (topic, payload) => {
       if (topic !== this.config.completeTopic) return;
+      this.status.lastMessageAt = new Date().toISOString();
       const raw = payload.toString();
       try {
         const result = JSON.parse(raw) as AgentQJobResult;
@@ -229,6 +259,7 @@ export class AgentQJobQueueService implements JobQueueService {
     });
 
     this.client.on('error', (error) => {
+      this.status.lastError = error.message;
       console.error('[AgentQ] MQTT error', error);
     });
   }
@@ -350,7 +381,21 @@ export class AgentQJobQueueService implements JobQueueService {
     this.client.end(true);
   }
 
+  getStatus(): JobQueueStatus {
+    return {
+      provider: 'agentq',
+      connected: this.client.connected,
+      lastConnectAt: this.status.lastConnectAt,
+      lastDisconnectAt: this.status.lastDisconnectAt,
+      lastError: this.status.lastError,
+      lastMessageAt: this.status.lastMessageAt,
+    };
+  }
+
   private async publish(job: AgentQJobRequest): Promise<void> {
+    if (!this.client.connected) {
+      console.warn('[AgentQ] Publishing while MQTT disconnected');
+    }
     const payload = JSON.stringify(job);
     await new Promise<void>((resolve, reject) => {
       this.client.publish(this.config.enqueueTopic, payload, { qos: this.config.qos }, (error) => {
